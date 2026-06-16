@@ -5,6 +5,7 @@ import {
   formatMoney,
   getConsultants,
   getProducts,
+  rememberLastTxn,
   type BookSuccess,
   type CollectionMethod,
   type ConsultantOption,
@@ -104,6 +105,7 @@ export default function BookForm() {
         ...(form.couponCode.trim() ? { couponCode: form.couponCode.trim() } : {}),
       });
       setResult(res);
+      rememberLastTxn(res.txnId);
     } catch (err) {
       if (err instanceof ApiError) {
         const payload = err.payload as

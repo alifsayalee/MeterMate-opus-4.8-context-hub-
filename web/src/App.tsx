@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
 import { getHealth, type HealthResponse, ApiError } from './api';
 import BookForm from './components/client/BookForm';
+import UsageForm from './components/client/UsageForm';
 
 type Role = 'client' | 'admin';
+type ClientTab = 'book' | 'usage';
+
+const CLIENT_TABS: Array<{ id: ClientTab; label: string }> = [
+  { id: 'book', label: 'Book & Subscribe' },
+  { id: 'usage', label: 'Report Usage' },
+];
 
 /**
  * App shell. Hosts the Client/Admin role switch and a live health banner so the
@@ -11,6 +18,7 @@ type Role = 'client' | 'admin';
  */
 export default function App() {
   const [role, setRole] = useState<Role>('client');
+  const [clientTab, setClientTab] = useState<ClientTab>('book');
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,7 +87,28 @@ export default function App() {
 
       <main style={{ marginTop: 24 }}>
         {role === 'client' ? (
-          <BookForm />
+          <>
+            <nav style={{ display: 'flex', gap: 8, marginBottom: 20, borderBottom: '1px solid #eee', paddingBottom: 12 }}>
+              {CLIENT_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setClientTab(t.id)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #ddd',
+                    background: clientTab === t.id ? '#2b6cb0' : '#fff',
+                    color: clientTab === t.id ? '#fff' : '#333',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+            {clientTab === 'book' ? <BookForm /> : <UsageForm />}
+          </>
         ) : (
           <p style={{ color: '#999' }}>Admin forms will appear here as each use case is built.</p>
         )}

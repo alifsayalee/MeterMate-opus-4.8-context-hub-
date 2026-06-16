@@ -85,6 +85,36 @@ export interface SessionData {
   scratch: Record<string, unknown>;
 }
 
+export type PlanChangeTiming = 'prorate' | 'at-renewal';
+
+/** UC3 — prorated cost preview of a plan change (no commit). */
+export interface PlanChangePreview {
+  fromHandle: string | null;
+  fromName: string | null;
+  targetHandle: string;
+  targetName: string;
+  timing: PlanChangeTiming;
+  proratedAdjustmentInCents: number;
+  chargeInCents: number;
+  creditAppliedInCents: number;
+  paymentDueInCents: number;
+  /** null = takes effect immediately; otherwise the effective date (ISO). */
+  effectiveDate: string | null;
+}
+
+/** UC3 — committed plan change result. */
+export interface PlanChangeResult {
+  fromHandle: string | null;
+  fromName: string | null;
+  toHandle: string;
+  toName: string;
+  timing: PlanChangeTiming;
+  proratedAdjustmentInCents: number;
+  effectiveDate: string | null;
+  state: string;
+  maxioUrl: string;
+}
+
 /** Normalized result of UC2 recordUsage, ready for the HTTP response. */
 export interface UsageResult {
   componentHandle: string;

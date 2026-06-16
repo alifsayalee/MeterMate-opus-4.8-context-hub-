@@ -120,6 +120,59 @@ export function formatMoney(cents: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 }
 
+// ----- UC2: Report Session Usage -----
+
+export interface UsageRequest {
+  txnRef: string;
+  componentHandle: string;
+  quantity: number;
+  memo?: string;
+  timestamp?: string;
+}
+
+export interface UsageResult {
+  componentHandle: string;
+  componentName: string;
+  kind: 'metered' | 'event-based';
+  quantity: number;
+  unitName: string;
+  periodTotal: number | null;
+  recordedEvents: number | null;
+  accruesToNextInvoice: true;
+}
+
+export interface UsageSuccess {
+  status: 'ok';
+  txnId: string;
+  channelId?: string;
+  channelName?: string;
+  usage: UsageResult;
+}
+
+export function recordUsage(body: UsageRequest): Promise<UsageSuccess> {
+  return postWithSession<UsageSuccess>('/usage', body as unknown as Record<string, unknown>);
+}
+
+// ----- shared client-side memory of the last transaction -----
+
+const LAST_TXN_KEY = 'metermate.lastTxnId';
+
+export function rememberLastTxn(txnId: string): void {
+  try {
+    localStorage.setItem(LAST_TXN_KEY, txnId);
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+export function getLastTxn(): string {
+  try {
+    return localStorage.getItem(LAST_TXN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 /** POST helper that injects the sessionId into the body. */
 export function postWithSession<T>(path: string, body: Record<string, unknown>): Promise<T> {
   return request<T>(path, {
