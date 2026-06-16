@@ -1,0 +1,93 @@
+/**
+ * Shared domain types. Kept free of any SDK imports so they can describe the
+ * MeterMate contract independently of Maxio/Slack wire shapes.
+ */
+
+/** Discriminated status returned by every mutating route. */
+export type ApiStatus = 'ok' | 'maxio_failed' | 'invalid' | 'session_expired';
+
+export type CollectionMethodValue = 'automatic' | 'remittance';
+
+/** A billable plan in the seeded catalog (Maxio Product, recurring monthly). */
+export interface Plan {
+  readonly handle: string;
+  readonly name: string;
+  /** Recurring monthly price in cents — the MRR shown in Slack. */
+  readonly priceInCents: number;
+}
+
+export type ComponentKind = 'metered' | 'event-based';
+
+/** A usage component in the seeded catalog. */
+export interface CatalogComponent {
+  readonly handle: string;
+  readonly name: string;
+  readonly kind: ComponentKind;
+  readonly unitPriceInCents: number;
+  readonly unitName: string;
+}
+
+/** A consultant the client can book. Seeded; not a Maxio entity. */
+export interface Consultant {
+  readonly id: string;
+  readonly name: string;
+  /** Slack email used to invite the consultant to transaction channels. */
+  readonly slackEmail: string;
+  /** URL-safe slug used in channel names. */
+  readonly slug: string;
+}
+
+/** Transaction lifecycle state, narrated into the Slack channel. */
+export type TransactionState = 'started' | 'in_progress' | 'completed' | 'failed';
+
+export type TransactionType =
+  | 'subscription'
+  | 'usage'
+  | 'plan_change'
+  | 'lifecycle'
+  | 'invoice';
+
+/** One consultant↔client transaction. Holds the channel-reuse linkage. */
+export interface TransactionRecord {
+  txnId: string;
+  consultantId: string;
+  clientEmail: string;
+  clientName: string;
+  type: TransactionType;
+  state: TransactionState;
+  /** Maxio subscription id once created. */
+  subscriptionId?: number;
+  /** Maxio customer id once created. */
+  customerId?: number;
+  /** Slack channel created/reused for this consultant↔client pair. */
+  channelId?: string;
+  channelName?: string;
+  /** True when the client could not be invited and is notified by email. */
+  clientByEmail?: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Per-session live state: last submission + last result for multi-step flows. */
+export interface SessionData {
+  sessionId: string;
+  lastTouched: number;
+  /** Idempotency keys already processed in this session. */
+  idempotencyKeys: Set<string>;
+  /** Free-form bag for multi-step flows (e.g. UC3 preview → confirm). */
+  scratch: Record<string, unknown>;
+}
+
+/** Normalized result of UC1 createSubscription, ready for the HTTP response. */
+export interface SubscriptionResult {
+  subscriptionId: number;
+  customerId: number | undefined;
+  state: string;
+  planHandle: string;
+  planName: string;
+  mrrInCents: number;
+  nextAssessmentAt: string | undefined;
+  collectionMethod: CollectionMethodValue;
+  /** Deep link to the subscription in the Maxio dashboard. */
+  maxioUrl: string;
+}

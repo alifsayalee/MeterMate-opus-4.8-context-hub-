@@ -3,6 +3,9 @@ import cors from 'cors';
 import { config } from './config.js';
 import { createLogger } from './logger.js';
 import { metaRouter } from './routes/meta.js';
+import { bookRouter } from './routes/book.js';
+import { checkAuth, isSlackConfigured } from './services/slackService.js';
+import { isMaxioConfigured } from './maxioClient.js';
 
 const log = createLogger('server');
 
@@ -19,6 +22,7 @@ export function createApp() {
   });
 
   app.use('/api', metaRouter);
+  app.use('/api', bookRouter);
 
   // 404 for unknown API routes.
   app.use('/api', (_req: Request, res: Response) => {
@@ -42,5 +46,14 @@ if (isMain) {
   app.listen(config.port, () => {
     log.info(`MeterMate server listening on http://localhost:${config.port}`);
     log.info(`Health: http://localhost:${config.port}/api/health`);
+    log.info(`Maxio configured: ${isMaxioConfigured()} · Slack configured: ${isSlackConfigured()}`);
+
+    // Non-blocking boot Slack auth check (plan §3.1). Logs only.
+    if (isSlackConfigured()) {
+      void checkAuth().then((r) => {
+        if (r.ok) log.info(`Slack auth ok${r.detail ? ` (${r.detail})` : ''}`);
+        else log.warn(`Slack auth check failed: ${r.detail ?? 'unknown'}`);
+      });
+    }
   });
 }

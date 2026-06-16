@@ -1,0 +1,99 @@
+import type { KnownBlock } from '@slack/web-api';
+
+/**
+ * Pure Block Kit builders (plan §5). Each returns a blocks array and touches no
+ * Slack client, so they are unit-testable in isolation. Pattern: header +
+ * context + fields grid + optional button.
+ */
+
+function header(text: string): KnownBlock {
+  return { type: 'header', text: { type: 'plain_text', text, emoji: true } };
+}
+
+function context(text: string): KnownBlock {
+  return { type: 'context', elements: [{ type: 'mrkdwn', text }] };
+}
+
+function fields(pairs: Array<[string, string]>): KnownBlock {
+  return {
+    type: 'section',
+    fields: pairs.map(([k, v]) => ({ type: 'mrkdwn', text: `*${k}*\n${v}` })),
+  };
+}
+
+function linkButton(text: string, url: string): KnownBlock {
+  return {
+    type: 'actions',
+    elements: [{ type: 'button', text: { type: 'plain_text', text, emoji: true }, url }],
+  };
+}
+
+function money(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** Channel-opened announcement (any UC, first action of a pair). */
+export function transactionStartedBlocks(input: {
+  consultantName: string;
+  clientName: string;
+  type: string;
+}): KnownBlock[] {
+  return [
+    header(':wave: Transaction started'),
+    context(`Consultant *${input.consultantName}* · Client *${input.clientName}*`),
+    fields([
+      ['Consultant', input.consultantName],
+      ['Client', input.clientName],
+      ['Type', input.type],
+    ]),
+  ];
+}
+
+/** UC1 in-progress. */
+export function bookingProgressBlocks(planName: string): KnownBlock[] {
+  return [
+    header(':hourglass_flowing_sand: Creating subscription…'),
+    context(`Enrolling on *${planName}*`),
+  ];
+}
+
+/** UC1 completion — subscription active. */
+export function subscriptionActiveBlocks(input: {
+  customerName: string;
+  planName: string;
+  mrrInCents: number;
+  state: string;
+  nextAssessmentAt: string | undefined;
+  maxioUrl: string;
+}): KnownBlock[] {
+  return [
+    header(':tada: Subscription active'),
+    context(`*${input.customerName}* is now on *${input.planName}*`),
+    fields([
+      ['Customer', input.customerName],
+      ['Plan', input.planName],
+      ['MRR', `${money(input.mrrInCents)} / month`],
+      ['State', input.state],
+      ['Next bill', input.nextAssessmentAt ?? '—'],
+    ]),
+    linkButton('View in Maxio', input.maxioUrl),
+  ];
+}
+
+/** Note posted when the client could not be invited (tier-2 fallback). */
+export function clientByEmailNoticeBlocks(clientEmail: string): KnownBlock[] {
+  return [
+    context(
+      `:email: ${clientEmail} isn't a workspace member — they'll be notified by email instead of in this channel.`,
+    ),
+  ];
+}
+
+/** Generic failure block (any UC). */
+export function failureBlocks(useCase: string, errorSummary: string): KnownBlock[] {
+  return [
+    header(`:warning: ${useCase} failed`),
+    fields([['What failed', useCase]]),
+    context(`Maxio error: ${errorSummary}`),
+  ];
+}
