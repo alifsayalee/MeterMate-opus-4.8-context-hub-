@@ -1,4 +1,13 @@
-import 'dotenv/config';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+
+// Load .env robustly regardless of cwd: first any .env in the current working
+// directory, then the monorepo-root .env (this file lives at server/src/, so
+// the root is two levels up). dotenv does not override already-set vars, so
+// real environment variables always win.
+dotenv.config();
+dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../../.env') });
 
 /**
  * Typed environment loader. Reads process.env once at startup, validates the
