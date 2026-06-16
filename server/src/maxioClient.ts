@@ -1,4 +1,10 @@
-import { Client, Environment, SubscriptionsController } from '@maxio-com/advanced-billing-sdk';
+import {
+  Client,
+  ComponentsController,
+  Environment,
+  SubscriptionComponentsController,
+  SubscriptionsController,
+} from '@maxio-com/advanced-billing-sdk';
 import { config } from './config.js';
 import { createLogger } from './logger.js';
 
@@ -42,6 +48,14 @@ export function getClient(): Client {
 // Controllers are cheap wrappers over the client; build per call site.
 export function subscriptionsController(): SubscriptionsController {
   return new SubscriptionsController(getClient());
+}
+
+export function subscriptionComponentsController(): SubscriptionComponentsController {
+  return new SubscriptionComponentsController(getClient());
+}
+
+export function componentsController(): ComponentsController {
+  return new ComponentsController(getClient());
 }
 
 /** Deep link to a subscription in the Maxio dashboard for "View in Maxio". */

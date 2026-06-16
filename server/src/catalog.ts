@@ -1,3 +1,4 @@
+import { config } from './config.js';
 import type { CatalogComponent, Consultant, Plan } from './types.js';
 
 /**
@@ -19,16 +20,20 @@ export const PLANS: readonly Plan[] = Object.freeze([
 
 export const COMPONENTS: readonly CatalogComponent[] = Object.freeze([
   {
-    handle: 'consulting-minutes',
+    // Matches the metered component on the Maxio site (id 3033534).
+    handle: 'chub-test-minutes',
     name: 'Consulting time',
     kind: 'metered',
     unitPriceInCents: 200,
     unitName: 'minute',
+    maxioComponentId: config.maxio.consultingComponentId,
   },
   {
+    // The site's api-calls is a metered component (not event-based), so usage
+    // is recorded via createUsage (quantity), resolved by handle at runtime.
     handle: 'api-calls',
     name: 'API calls',
-    kind: 'event-based',
+    kind: 'metered',
     unitPriceInCents: 1,
     unitName: 'event',
   },

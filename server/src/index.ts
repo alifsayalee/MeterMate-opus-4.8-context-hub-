@@ -4,7 +4,9 @@ import { config } from './config.js';
 import { createLogger } from './logger.js';
 import { metaRouter } from './routes/meta.js';
 import { bookRouter } from './routes/book.js';
+import { usageRouter } from './routes/usage.js';
 import { checkAuth, isSlackConfigured } from './services/slackService.js';
+import { verifyCatalogComponents } from './services/maxioService.js';
 import { isMaxioConfigured } from './maxioClient.js';
 
 const log = createLogger('server');
@@ -23,6 +25,7 @@ export function createApp() {
 
   app.use('/api', metaRouter);
   app.use('/api', bookRouter);
+  app.use('/api', usageRouter);
 
   // 404 for unknown API routes.
   app.use('/api', (_req: Request, res: Response) => {
@@ -54,6 +57,27 @@ if (isMain) {
         if (r.ok) log.info(`Slack auth ok${r.detail ? ` (${r.detail})` : ''}`);
         else log.warn(`Slack auth check failed: ${r.detail ?? 'unknown'}`);
       });
+    }
+
+    // Non-blocking catalog-vs-site component check. Logs the handles that
+    // actually exist on the Maxio site so config mismatches are visible.
+    if (isMaxioConfigured()) {
+      void verifyCatalogComponents()
+        .then((r) => {
+          const list = r.available
+            .map((c) => `${c.handle ?? '(no handle)'} [${c.kind ?? '?'}, id=${c.id ?? '?'}]`)
+            .join(', ');
+          log.info(`Maxio site components (${r.available.length}): ${list || '(none)'}`);
+          if (r.missing.length > 0) {
+            log.warn(
+              `Catalog component handle(s) NOT found on the Maxio site: ${r.missing.join(', ')}. ` +
+                `Update server/src/catalog.ts to match one of the available handles above.`,
+            );
+          } else {
+            log.info(`All catalog component handles matched the site: ${r.matched.join(', ')}`);
+          }
+        })
+        .catch((err) => log.warn('Component verification failed', err));
     }
   });
 }
