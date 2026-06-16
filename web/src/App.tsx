@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { getHealth, type HealthResponse, ApiError } from './api';
 import BookForm from './components/client/BookForm';
 import UsageForm from './components/client/UsageForm';
+import PlanChangeForm from './components/client/PlanChangeForm';
 
 type Role = 'client' | 'admin';
-type ClientTab = 'book' | 'usage';
+type ClientTab = 'book' | 'usage' | 'plan';
 
 const CLIENT_TABS: Array<{ id: ClientTab; label: string }> = [
   { id: 'book', label: 'Book & Subscribe' },
   { id: 'usage', label: 'Report Usage' },
+  { id: 'plan', label: 'Change Plan' },
 ];
 
 /**
@@ -107,7 +109,7 @@ export default function App() {
                 </button>
               ))}
             </nav>
-            {clientTab === 'book' ? <BookForm /> : <UsageForm />}
+            {clientTab === 'book' ? <BookForm /> : clientTab === 'usage' ? <UsageForm /> : <PlanChangeForm />}
           </>
         ) : (
           <p style={{ color: '#999' }}>Admin forms will appear here as each use case is built.</p>

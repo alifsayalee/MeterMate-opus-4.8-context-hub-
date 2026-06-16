@@ -5,6 +5,7 @@ import {
   formatMoney,
   getConsultants,
   getProducts,
+  rememberCurrentPlan,
   rememberLastTxn,
   type BookSuccess,
   type CollectionMethod,
@@ -106,6 +107,7 @@ export default function BookForm() {
       });
       setResult(res);
       rememberLastTxn(res.txnId);
+      rememberCurrentPlan(res.txnId, res.subscription.planHandle);
     } catch (err) {
       if (err instanceof ApiError) {
         const payload = err.payload as

@@ -153,6 +153,72 @@ export function recordUsage(body: UsageRequest): Promise<UsageSuccess> {
   return postWithSession<UsageSuccess>('/usage', body as unknown as Record<string, unknown>);
 }
 
+// ----- UC3: Plan Change -----
+
+export type PlanChangeTiming = 'prorate' | 'at-renewal';
+
+export interface PlanChangeRequest {
+  txnRef: string;
+  targetHandle: string;
+  timing: PlanChangeTiming;
+}
+
+export interface PlanChangePreview {
+  fromHandle: string | null;
+  fromName: string | null;
+  targetHandle: string;
+  targetName: string;
+  timing: PlanChangeTiming;
+  proratedAdjustmentInCents: number;
+  chargeInCents: number;
+  creditAppliedInCents: number;
+  paymentDueInCents: number;
+  effectiveDate: string | null;
+}
+
+export interface PlanChangeResult {
+  fromHandle: string | null;
+  fromName: string | null;
+  toHandle: string;
+  toName: string;
+  timing: PlanChangeTiming;
+  proratedAdjustmentInCents: number;
+  effectiveDate: string | null;
+  state: string;
+  maxioUrl: string;
+}
+
+export interface PreviewSuccess {
+  status: 'ok';
+  txnId: string;
+  channelId?: string;
+  channelName?: string;
+  preview: PlanChangePreview;
+}
+
+export interface CommitSuccess {
+  status: 'ok';
+  txnId: string;
+  channelId?: string;
+  channelName?: string;
+  planChange: PlanChangeResult;
+}
+
+export function previewPlanChange(body: PlanChangeRequest): Promise<PreviewSuccess> {
+  return postWithSession<PreviewSuccess>('/plan-change/preview', body as unknown as Record<string, unknown>);
+}
+
+export function commitPlanChange(body: PlanChangeRequest): Promise<CommitSuccess> {
+  return postWithSession<CommitSuccess>('/plan-change', body as unknown as Record<string, unknown>);
+}
+
+/** Signed money for proration deltas (credit shown negative). */
+export function formatSignedMoney(cents: number): string {
+  if (cents === 0) return formatMoney(0);
+  const sign = cents > 0 ? '+' : '−';
+  return `${sign}${formatMoney(Math.abs(cents))}`;
+}
+
 // ----- shared client-side memory of the last transaction -----
 
 const LAST_TXN_KEY = 'metermate.lastTxnId';
@@ -171,6 +237,34 @@ export function getLastTxn(): string {
   } catch {
     return '';
   }
+}
+
+// Track the current plan per transaction so the UI can pre-check a no-op plan
+// change before calling the API. Best-effort (browser-local); the backend is
+// always the authority.
+const CURRENT_PLAN_KEY = 'metermate.currentPlanByTxn';
+
+function readPlanMap(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(CURRENT_PLAN_KEY) ?? '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+export function rememberCurrentPlan(txnId: string, planHandle: string): void {
+  if (!txnId || !planHandle) return;
+  try {
+    const map = readPlanMap();
+    map[txnId] = planHandle;
+    localStorage.setItem(CURRENT_PLAN_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+export function getCurrentPlan(txnId: string): string | undefined {
+  return readPlanMap()[txnId];
 }
 
 /** POST helper that injects the sessionId into the body. */
