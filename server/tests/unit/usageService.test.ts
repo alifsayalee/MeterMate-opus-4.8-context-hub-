@@ -21,6 +21,7 @@ vi.mock('../../src/maxioClient.js', () => ({
   isMaxioConfigured: () => true,
 }));
 
+import { ApiError } from '@maxio-com/advanced-billing-sdk';
 import { recordUsage, verifyCatalogComponents, _resetComponentCache } from '../../src/services/maxioService.js';
 import { MaxioServiceError } from '../../src/services/maxioErrors.js';
 import type { CatalogComponent } from '../../src/types.js';
@@ -99,6 +100,23 @@ describe('maxioService.recordUsage — metered', () => {
     await recordUsage({ subscriptionId: 234, component: meteredNoId, quantity: 5 });
     await recordUsage({ subscriptionId: 234, component: meteredNoId, quantity: 5 });
     expect(listSubscriptionComponentsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns a 404 from createUsage into a clear "not available on subscription" message', async () => {
+    const apiErr = new ApiError(
+      { request: {}, response: { statusCode: 404, headers: {}, body: '' } } as never,
+      '',
+    );
+    createUsageMock.mockRejectedValue(apiErr);
+
+    await recordUsage({ subscriptionId: 321, component: metered, quantity: 10 }).catch(
+      (e: MaxioServiceError) => {
+        expect(e.statusCode).toBe(404);
+        expect(e.message).toContain('not available on subscription 321');
+        expect(e.message).toContain('consulting-minutes');
+        expect(e.message.length).toBeGreaterThan(20); // never empty
+      },
+    );
   });
 
   it('throws a clear error when the handle is not present on the subscription', async () => {

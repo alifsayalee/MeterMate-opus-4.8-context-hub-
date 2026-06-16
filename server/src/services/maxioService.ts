@@ -302,6 +302,20 @@ export async function recordUsage(input: RecordUsageInput): Promise<UsageResult>
   } catch (err) {
     if (err instanceof MaxioServiceError) throw err;
     const normalized = normalizeMaxioError(err, 'recordUsage');
+
+    // A 404 here means the component isn't allocated to this subscription —
+    // surface a clear, actionable message rather than a bare "Not Found".
+    if (normalized.statusCode === 404) {
+      const clear = new MaxioServiceError(
+        `Component "${component.handle}" is not available on subscription ${input.subscriptionId}. ` +
+          `Allocate the "${component.name}" component to this subscription's product in Maxio, then retry.`,
+        404,
+        normalized.details,
+      );
+      log.error(clear.message);
+      throw clear;
+    }
+
     log.error(normalized.message, { statusCode: normalized.statusCode });
     throw normalized;
   }

@@ -16,15 +16,45 @@ export class MaxioServiceError extends Error {
   }
 }
 
+/** Human-readable description for common HTTP status codes. */
+function httpStatusText(code: number | undefined): string {
+  switch (code) {
+    case 400:
+      return 'Bad Request';
+    case 401:
+      return 'Unauthorized';
+    case 403:
+      return 'Forbidden';
+    case 404:
+      return 'Not Found';
+    case 409:
+      return 'Conflict';
+    case 422:
+      return 'Unprocessable Entity';
+    case 429:
+      return 'Too Many Requests';
+    case 500:
+      return 'Internal Server Error';
+    case 502:
+      return 'Bad Gateway';
+    case 503:
+      return 'Service Unavailable';
+    default:
+      return code != null ? `HTTP ${code}` : 'Unknown error';
+  }
+}
+
 /** Extracts human-readable error strings from a Maxio error response body. */
 function extractDetails(body: unknown): string[] {
   if (body == null) return [];
   let parsed: unknown = body;
   if (typeof body === 'string') {
+    const trimmed = body.trim();
+    if (trimmed === '') return []; // empty body carries no detail
     try {
-      parsed = JSON.parse(body);
+      parsed = JSON.parse(trimmed);
     } catch {
-      return [body];
+      return [trimmed];
     }
   }
   if (typeof parsed !== 'object' || parsed === null) return [];
@@ -45,7 +75,7 @@ function extractDetails(body: unknown): string[] {
   }
   const single = (parsed as Record<string, unknown>).error;
   if (typeof single === 'string') out.push(single);
-  return out;
+  return out.filter((s) => s != null && s.trim() !== '');
 }
 
 /**
@@ -56,10 +86,15 @@ function extractDetails(body: unknown): string[] {
 export function normalizeMaxioError(err: unknown, operation: string): MaxioServiceError {
   if (err instanceof ApiError) {
     const details = extractDetails(err.body);
+    const message = err.message?.trim();
+    // Always end up with something meaningful: parsed details, then the SDK
+    // message, then the HTTP status description.
     const summary =
       details.length > 0
         ? details.join('; ')
-        : err.message || `Maxio returned HTTP ${err.statusCode}`;
+        : message && message.length > 0
+          ? message
+          : `Maxio returned ${httpStatusText(err.statusCode)}`;
     return new MaxioServiceError(`${operation} failed: ${summary}`, err.statusCode, details);
   }
   if (err instanceof Error) {

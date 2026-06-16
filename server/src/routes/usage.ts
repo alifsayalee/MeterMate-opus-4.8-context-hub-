@@ -112,7 +112,7 @@ usageRouter.post('/usage', async (req: Request, res: Response) => {
       await postBlocks(channelId, failureBlocks('Usage recording', summary), 'Usage recording failed');
     }
 
-    const httpStatus = isMaxio && err.statusCode === 400 ? 400 : 502;
+    const httpStatus = isMaxio && (err.statusCode === 400 || err.statusCode === 404) ? 400 : 502;
     return res.status(httpStatus).json({
       status: 'maxio_failed',
       txnId: txn.txnId,
