@@ -114,6 +114,56 @@ export function usageRecordedBlocks(input: {
   ];
 }
 
+function prorationLabel(cents: number): string {
+  if (cents === 0) return 'no proration';
+  const sign = cents > 0 ? '+' : '−';
+  return `${sign}${money(Math.abs(cents))}`;
+}
+
+/** UC3 preview — prorated cost before commit. */
+export function planChangePreviewBlocks(input: {
+  fromName: string | null;
+  toName: string;
+  timing: string;
+  proratedAdjustmentInCents: number;
+  paymentDueInCents: number;
+  effectiveLabel: string;
+}): KnownBlock[] {
+  return [
+    header(':mag: Plan change preview'),
+    context(`*${input.fromName ?? 'current plan'}* → *${input.toName}* (${input.timing})`),
+    fields([
+      ['From', input.fromName ?? '—'],
+      ['To', input.toName],
+      ['Proration', prorationLabel(input.proratedAdjustmentInCents)],
+      ['Due now', money(input.paymentDueInCents)],
+      ['Effective', input.effectiveLabel],
+    ]),
+  ];
+}
+
+/** UC3 completion — plan changed. */
+export function planChangedBlocks(input: {
+  fromName: string | null;
+  toName: string;
+  timing: string;
+  proratedAdjustmentInCents: number;
+  effectiveLabel: string;
+  maxioUrl: string;
+}): KnownBlock[] {
+  return [
+    header(':arrows_counterclockwise: Plan changed'),
+    context(`*${input.fromName ?? 'current plan'}* → *${input.toName}*`),
+    fields([
+      ['From', input.fromName ?? '—'],
+      ['To', input.toName],
+      ['Proration', prorationLabel(input.proratedAdjustmentInCents)],
+      ['Effective', input.effectiveLabel],
+    ]),
+    linkButton('View in Maxio', input.maxioUrl),
+  ];
+}
+
 /** Note posted when the client could not be invited (tier-2 fallback). */
 export function clientByEmailNoticeBlocks(clientEmail: string): KnownBlock[] {
   return [

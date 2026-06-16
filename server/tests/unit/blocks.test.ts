@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   failureBlocks,
+  planChangedBlocks,
+  planChangePreviewBlocks,
   subscriptionActiveBlocks,
   transactionStartedBlocks,
   usageRecordedBlocks,
@@ -59,6 +61,37 @@ describe('block builders', () => {
       recordedEvents: 5,
     });
     expect(textDump(blocks)).toContain('Events recorded');
+  });
+
+  it('planChangePreviewBlocks shows from→to and a signed proration', () => {
+    const blocks = planChangePreviewBlocks({
+      fromName: 'Basic plan',
+      toName: 'Pro plan',
+      timing: 'prorate',
+      proratedAdjustmentInCents: 20000,
+      paymentDueInCents: 20000,
+      effectiveLabel: 'Immediately',
+    });
+    const dump = textDump(blocks);
+    expect(dump).toContain('Plan change preview');
+    expect(dump).toContain('Basic plan');
+    expect(dump).toContain('Pro plan');
+    expect(dump).toContain('+$200.00');
+  });
+
+  it('planChangedBlocks shows a credit (negative proration) and a Maxio button', () => {
+    const blocks = planChangedBlocks({
+      fromName: 'Pro plan',
+      toName: 'Basic plan',
+      timing: 'prorate',
+      proratedAdjustmentInCents: -15000,
+      effectiveLabel: 'Immediately',
+      maxioUrl: 'https://site.chargify.com/subscriptions/9',
+    });
+    const dump = textDump(blocks);
+    expect(dump).toContain('Plan changed');
+    expect(dump).toContain('−$150.00');
+    expect(dump).toContain('https://site.chargify.com/subscriptions/9');
   });
 
   it('failureBlocks surfaces the error summary', () => {

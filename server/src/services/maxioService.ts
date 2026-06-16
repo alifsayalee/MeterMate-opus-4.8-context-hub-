@@ -3,22 +3,34 @@ import {
   type CreateSubscriptionRequest,
   type CreateUsageRequest,
   type EBBEvent,
+  type SubscriptionMigrationPreviewRequest,
+  type SubscriptionProductMigrationRequest,
+  type UpdateSubscriptionRequest,
 } from '@maxio-com/advanced-billing-sdk';
 import { COMPONENTS, getPlan } from '../catalog.js';
 import { createLogger } from '../logger.js';
 import {
   componentsController,
   subscriptionComponentsController,
+  subscriptionProductsController,
   subscriptionsController,
   subscriptionUrl,
 } from '../maxioClient.js';
 import type {
   CatalogComponent,
   CollectionMethodValue,
+  PlanChangePreview,
+  PlanChangeResult,
+  PlanChangeTiming,
   SubscriptionResult,
   UsageResult,
 } from '../types.js';
 import { MaxioServiceError, normalizeMaxioError } from './maxioErrors.js';
+
+/** Safely coerces a Maxio bigint cents value to a JS number. */
+function centsToNumber(v: bigint | number | null | undefined): number {
+  return v != null ? Number(v) : 0;
+}
 
 /** Max events ingestible in one bulk call (Maxio caps at 1000). */
 const MAX_EVENTS_PER_CALL = 1000;
@@ -114,6 +126,206 @@ export async function verifyCatalogComponents(): Promise<ComponentCheckResult> {
   }
 
   return { available, matched, missing };
+}
+
+interface SubscriptionSummary {
+  state: string;
+  productHandle: string | null;
+  productName: string | null;
+  currentPeriodEndsAt: string | null;
+}
+
+/** Reads the current plan + period for a subscription (UC3 context). */
+async function readSubscriptionSummary(subscriptionId: number): Promise<SubscriptionSummary> {
+  const { result } = await subscriptionsController().readSubscription(subscriptionId);
+  const sub = result.subscription;
+  return {
+    state: String(sub?.state ?? 'unknown'),
+    productHandle: sub?.product?.handle ?? null,
+    productName: sub?.product?.name ?? null,
+    currentPeriodEndsAt: sub?.currentPeriodEndsAt ?? null,
+  };
+}
+
+function resolvePlanName(handle: string | null, fallback: string | null): string | null {
+  if (!handle) return fallback;
+  return getPlan(handle)?.name ?? fallback;
+}
+
+export interface PlanChangeInput {
+  subscriptionId: number;
+  targetHandle: string;
+  timing: PlanChangeTiming;
+}
+
+/**
+ * UC3 — preview the prorated cost of a plan change without committing.
+ *  - prorate: uses previewSubscriptionProductMigration (the same prorated
+ *    mechanism the commit applies), effective immediately.
+ *  - at-renewal: no proration; effective at the current period end.
+ */
+export async function previewPlanChange(input: PlanChangeInput): Promise<PlanChangePreview> {
+  const target = getPlan(input.targetHandle);
+  if (!target) {
+    throw new MaxioServiceError(`Unknown plan handle "${input.targetHandle}"`, 400, []);
+  }
+
+  try {
+    const current = await readSubscriptionSummary(input.subscriptionId);
+    const fromName = resolvePlanName(current.productHandle, current.productName);
+
+    if (current.productHandle === input.targetHandle) {
+      throw new MaxioServiceError(
+        `Subscription is already on "${target.name}"`,
+        400,
+        [],
+      );
+    }
+
+    if (input.timing === 'at-renewal') {
+      // No proration; takes effect next period.
+      return {
+        fromHandle: current.productHandle,
+        fromName,
+        targetHandle: target.handle,
+        targetName: target.name,
+        timing: 'at-renewal',
+        proratedAdjustmentInCents: 0,
+        chargeInCents: 0,
+        creditAppliedInCents: 0,
+        paymentDueInCents: 0,
+        effectiveDate: current.currentPeriodEndsAt,
+      };
+    }
+
+    const body: SubscriptionMigrationPreviewRequest = {
+      migration: {
+        productHandle: target.handle,
+        includeTrial: false,
+        includeInitialCharge: false,
+        includeCoupons: true,
+        preservePeriod: true,
+      },
+    };
+
+    const { result } = await subscriptionProductsController().previewSubscriptionProductMigration(
+      input.subscriptionId,
+      body,
+    );
+    const m = result.migration;
+
+    return {
+      fromHandle: current.productHandle,
+      fromName,
+      targetHandle: target.handle,
+      targetName: target.name,
+      timing: 'prorate',
+      proratedAdjustmentInCents: centsToNumber(m.proratedAdjustmentInCents),
+      chargeInCents: centsToNumber(m.chargeInCents),
+      creditAppliedInCents: centsToNumber(m.creditAppliedInCents),
+      paymentDueInCents: centsToNumber(m.paymentDueInCents),
+      effectiveDate: null, // immediate
+    };
+  } catch (err) {
+    if (err instanceof MaxioServiceError) throw err;
+    const normalized = normalizeMaxioError(err, 'previewPlanChange');
+    log.error(normalized.message, { statusCode: normalized.statusCode });
+    throw normalized;
+  }
+}
+
+/**
+ * UC3 — commit a plan change.
+ *  - prorate: previews to capture the proration figure, then migrates now with
+ *    preservePeriod (immediate prorated change).
+ *  - at-renewal: schedules a non-prorated change via updateSubscription with
+ *    productChangeDelayed, effective at the next renewal.
+ */
+export async function applyPlanChange(input: PlanChangeInput): Promise<PlanChangeResult> {
+  const target = getPlan(input.targetHandle);
+  if (!target) {
+    throw new MaxioServiceError(`Unknown plan handle "${input.targetHandle}"`, 400, []);
+  }
+
+  try {
+    const current = await readSubscriptionSummary(input.subscriptionId);
+    const fromName = resolvePlanName(current.productHandle, current.productName);
+
+    if (current.productHandle === input.targetHandle) {
+      throw new MaxioServiceError(`Subscription is already on "${target.name}"`, 400, []);
+    }
+
+    if (input.timing === 'at-renewal') {
+      const body: UpdateSubscriptionRequest = {
+        subscription: {
+          productHandle: target.handle,
+          productChangeDelayed: true,
+        },
+      };
+      await subscriptionsController().updateSubscription(input.subscriptionId, body);
+      log.info(`Scheduled plan change to "${target.handle}" at renewal for sub ${input.subscriptionId}`);
+
+      return {
+        fromHandle: current.productHandle,
+        fromName,
+        toHandle: target.handle,
+        toName: target.name,
+        timing: 'at-renewal',
+        proratedAdjustmentInCents: 0,
+        effectiveDate: current.currentPeriodEndsAt,
+        state: current.state,
+        maxioUrl: subscriptionUrl(input.subscriptionId),
+      };
+    }
+
+    // prorate now: capture the proration figure, then migrate.
+    const previewBody: SubscriptionMigrationPreviewRequest = {
+      migration: {
+        productHandle: target.handle,
+        includeTrial: false,
+        includeInitialCharge: false,
+        includeCoupons: true,
+        preservePeriod: true,
+      },
+    };
+    const products = subscriptionProductsController();
+    const { result: preview } = await products.previewSubscriptionProductMigration(
+      input.subscriptionId,
+      previewBody,
+    );
+
+    const migrateBody: SubscriptionProductMigrationRequest = {
+      migration: {
+        productHandle: target.handle,
+        includeTrial: false,
+        includeInitialCharge: false,
+        includeCoupons: true,
+        preservePeriod: true,
+      },
+    };
+    const { result: migrated } = await products.migrateSubscriptionProduct(
+      input.subscriptionId,
+      migrateBody,
+    );
+    log.info(`Migrated sub ${input.subscriptionId} to "${target.handle}" (prorated)`);
+
+    return {
+      fromHandle: current.productHandle,
+      fromName,
+      toHandle: migrated.subscription?.product?.handle ?? target.handle,
+      toName: target.name,
+      timing: 'prorate',
+      proratedAdjustmentInCents: centsToNumber(preview.migration.proratedAdjustmentInCents),
+      effectiveDate: null,
+      state: String(migrated.subscription?.state ?? current.state),
+      maxioUrl: subscriptionUrl(input.subscriptionId),
+    };
+  } catch (err) {
+    if (err instanceof MaxioServiceError) throw err;
+    const normalized = normalizeMaxioError(err, 'applyPlanChange');
+    log.error(normalized.message, { statusCode: normalized.statusCode });
+    throw normalized;
+  }
 }
 
 /**
