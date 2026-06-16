@@ -25,6 +25,13 @@ export interface CatalogComponent {
   readonly kind: ComponentKind;
   readonly unitPriceInCents: number;
   readonly unitName: string;
+  /**
+   * Numeric Maxio component id — required for metered usage (createUsage takes
+   * a numeric component id). Provisioned on the Maxio site and supplied via
+   * MAXIO_CONSULTING_COMPONENT_ID. Event-based components are addressed by
+   * their string `handle` (apiHandle) instead and don't need this.
+   */
+  readonly maxioComponentId?: number;
 }
 
 /** A consultant the client can book. Seeded; not a Maxio entity. */
@@ -76,6 +83,20 @@ export interface SessionData {
   idempotencyKeys: Set<string>;
   /** Free-form bag for multi-step flows (e.g. UC3 preview → confirm). */
   scratch: Record<string, unknown>;
+}
+
+/** Normalized result of UC2 recordUsage, ready for the HTTP response. */
+export interface UsageResult {
+  componentHandle: string;
+  componentName: string;
+  kind: ComponentKind;
+  quantity: number;
+  unitName: string;
+  /** Metered: running total for the period read back from Maxio. */
+  periodTotal: number | undefined;
+  /** Event-based: number of events ingested. */
+  recordedEvents: number | undefined;
+  accruesToNextInvoice: true;
 }
 
 /** Normalized result of UC1 createSubscription, ready for the HTTP response. */

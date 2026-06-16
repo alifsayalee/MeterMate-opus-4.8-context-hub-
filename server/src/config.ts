@@ -29,6 +29,8 @@ export interface AppConfig {
     readonly siteSubdomain: string;
     readonly environment: MaxioEnvironment;
     readonly defaultProductFamily: string;
+    /** Numeric id of the metered consulting-minutes component (UC2). */
+    readonly consultingComponentId: number | undefined;
   };
 
   readonly slack: {
@@ -61,6 +63,16 @@ function int(name: string, fallback: number): number {
   return parsed;
 }
 
+function optInt(name: string): number | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return undefined;
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed)) {
+    throw new Error(`Invalid integer for env var ${name}: "${raw}"`);
+  }
+  return parsed;
+}
+
 function bool(name: string, fallback: boolean): boolean {
   const raw = process.env[name];
   if (raw === undefined || raw === '') return fallback;
@@ -86,6 +98,7 @@ export const config: AppConfig = Object.freeze({
     siteSubdomain: str('MAXIO_SITE_SUBDOMAIN'),
     environment: maxioEnv('MAXIO_ENVIRONMENT'),
     defaultProductFamily: str('MAXIO_DEFAULT_PRODUCT_FAMILY', 'metermate'),
+    consultingComponentId: optInt('MAXIO_CONSULTING_COMPONENT_ID'),
   }),
 
   slack: Object.freeze({

@@ -76,6 +76,19 @@ describe('maxioService.createSubscription', () => {
     });
   });
 
+  it('falls back to the HTTP status description when the error body is empty', async () => {
+    const apiErr = new ApiError(
+      { request: {}, response: { statusCode: 404, headers: {}, body: '' } } as never,
+      '',
+    );
+    createSubscriptionMock.mockRejectedValue(apiErr);
+    await createSubscription(baseInput).catch((e: MaxioServiceError) => {
+      expect(e.statusCode).toBe(404);
+      expect(e.message).toContain('Not Found');
+      expect(e.message).not.toMatch(/failed:\s*$/); // never a trailing-empty summary
+    });
+  });
+
   it('rejects an unknown plan handle before calling the SDK', async () => {
     await expect(createSubscription({ ...baseInput, productHandle: 'enterprise' })).rejects.toBeInstanceOf(
       MaxioServiceError,

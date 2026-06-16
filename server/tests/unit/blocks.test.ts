@@ -3,6 +3,7 @@ import {
   failureBlocks,
   subscriptionActiveBlocks,
   transactionStartedBlocks,
+  usageRecordedBlocks,
 } from '../../src/slack/blocks.js';
 
 function textDump(blocks: unknown[]): string {
@@ -33,6 +34,31 @@ describe('block builders', () => {
       | { elements: Array<{ url: string }> }
       | undefined;
     expect(action?.elements[0]?.url).toBe('https://site.chargify.com/subscriptions/123');
+  });
+
+  it('usageRecordedBlocks shows the period total for metered usage', () => {
+    const blocks = usageRecordedBlocks({
+      componentName: 'Consulting time',
+      quantity: 30,
+      unitName: 'minute',
+      periodTotal: 90,
+      recordedEvents: undefined,
+    });
+    const dump = textDump(blocks);
+    expect(dump).toContain('Usage recorded');
+    expect(dump).toContain('90 minutes');
+    expect(dump).toContain('30 minutes');
+  });
+
+  it('usageRecordedBlocks shows events recorded for event-based usage', () => {
+    const blocks = usageRecordedBlocks({
+      componentName: 'API calls',
+      quantity: 5,
+      unitName: 'event',
+      periodTotal: undefined,
+      recordedEvents: 5,
+    });
+    expect(textDump(blocks)).toContain('Events recorded');
   });
 
   it('failureBlocks surfaces the error summary', () => {

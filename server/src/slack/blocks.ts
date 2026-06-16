@@ -80,6 +80,40 @@ export function subscriptionActiveBlocks(input: {
   ];
 }
 
+/** UC2 in-progress. */
+export function usageRecordingBlocks(componentName: string): KnownBlock[] {
+  return [
+    header(':bar_chart: Recording usage…'),
+    context(`Component *${componentName}*`),
+  ];
+}
+
+/** UC2 completion — usage recorded. */
+export function usageRecordedBlocks(input: {
+  componentName: string;
+  quantity: number;
+  unitName: string;
+  periodTotal: number | undefined;
+  recordedEvents: number | undefined;
+}): KnownBlock[] {
+  const unit = input.quantity === 1 ? input.unitName : `${input.unitName}s`;
+  const detail =
+    input.periodTotal != null
+      ? [['Period total', `${input.periodTotal} ${input.unitName}s`] as [string, string]]
+      : input.recordedEvents != null
+        ? [['Events recorded', String(input.recordedEvents)] as [string, string]]
+        : [];
+  return [
+    header(':white_check_mark: Usage recorded'),
+    context('Accrues to the next invoice.'),
+    fields([
+      ['Component', input.componentName],
+      ['Quantity', `${input.quantity} ${unit}`],
+      ...detail,
+    ]),
+  ];
+}
+
 /** Note posted when the client could not be invited (tier-2 fallback). */
 export function clientByEmailNoticeBlocks(clientEmail: string): KnownBlock[] {
   return [
