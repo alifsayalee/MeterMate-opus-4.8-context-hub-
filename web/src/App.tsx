@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getHealth, type HealthResponse, ApiError } from './api';
+import BookForm from './components/client/BookForm';
 
 type Role = 'client' | 'admin';
 
@@ -77,9 +78,11 @@ export default function App() {
       </section>
 
       <main style={{ marginTop: 24 }}>
-        <p style={{ color: '#999' }}>
-          {role === 'client' ? 'Client' : 'Admin'} forms will appear here as each use case is built.
-        </p>
+        {role === 'client' ? (
+          <BookForm />
+        ) : (
+          <p style={{ color: '#999' }}>Admin forms will appear here as each use case is built.</p>
+        )}
       </main>
     </div>
   );
