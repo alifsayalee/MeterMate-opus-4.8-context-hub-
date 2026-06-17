@@ -292,6 +292,37 @@ export function issueInvoice(body: InvoiceRequest): Promise<InvoiceSuccess> {
   return postAdminWithSession<InvoiceSuccess>('/invoices', body as unknown as Record<string, unknown>);
 }
 
+// ----- UC6: Billing Activity Digest (admin) -----
+
+export interface DigestData {
+  consultantId: string;
+  consultantName: string;
+  windowDays: number;
+  totalSubscriptions: number;
+  activeCount: number;
+  onHoldCount: number;
+  canceledCount: number;
+  newSignups: number;
+  churned: number;
+  mrrInCents: number;
+  openInvoices: number;
+  overdueInvoices: number;
+  openInvoiceAmountCents: number;
+  recentActivity: number;
+  generatedAt: string;
+}
+
+export interface DigestSuccess {
+  status: 'ok';
+  digest: DigestData;
+  digestChannel: string | null;
+  posted: boolean;
+}
+
+export function requestDigest(body: { consultantId: string; windowDays?: number }): Promise<DigestSuccess> {
+  return postAdminWithSession<DigestSuccess>('/digest', body as unknown as Record<string, unknown>);
+}
+
 // ----- shared client-side memory of the last transaction -----
 
 const LAST_TXN_KEY = 'metermate.lastTxnId';

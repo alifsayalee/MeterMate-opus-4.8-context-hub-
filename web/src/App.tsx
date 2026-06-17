@@ -6,15 +6,22 @@ import PlanChangeForm from './components/client/PlanChangeForm';
 import LifecycleForm from './components/client/LifecycleForm';
 import AdminLogin from './components/admin/AdminLogin';
 import InvoiceForm from './components/admin/InvoiceForm';
+import ActivityPanel from './components/admin/ActivityPanel';
 
 type Role = 'client' | 'admin';
 type ClientTab = 'book' | 'usage' | 'plan' | 'lifecycle';
+type AdminTab = 'invoices' | 'activity';
 
 const CLIENT_TABS: Array<{ id: ClientTab; label: string }> = [
   { id: 'book', label: 'Book & Subscribe' },
   { id: 'usage', label: 'Report Usage' },
   { id: 'plan', label: 'Change Plan' },
   { id: 'lifecycle', label: 'Lifecycle' },
+];
+
+const ADMIN_TABS: Array<{ id: AdminTab; label: string }> = [
+  { id: 'invoices', label: 'Issue Invoice' },
+  { id: 'activity', label: 'Activity Digest' },
 ];
 
 /**
@@ -27,6 +34,7 @@ export default function App() {
   const [clientTab, setClientTab] = useState<ClientTab>('book');
   const [adminAuthed, setAdminAuthed] = useState<boolean>(hasAdminAuth());
   const [adminNotice, setAdminNotice] = useState<string | undefined>(undefined);
+  const [adminTab, setAdminTab] = useState<AdminTab>('invoices');
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,7 +143,26 @@ export default function App() {
           />
         ) : (
           <>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid #eee', paddingBottom: 12 }}>
+              <nav style={{ display: 'flex', gap: 8 }}>
+                {ADMIN_TABS.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setAdminTab(t.id)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #ddd',
+                      background: adminTab === t.id ? '#2b6cb0' : '#fff',
+                      color: adminTab === t.id ? '#fff' : '#333',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </nav>
               <button
                 onClick={() => {
                   clearAdminAuth();
@@ -146,12 +173,21 @@ export default function App() {
                 Sign out
               </button>
             </div>
-            <InvoiceForm
-              onAuthExpired={(notice) => {
-                setAdminNotice(notice);
-                setAdminAuthed(false);
-              }}
-            />
+            {adminTab === 'invoices' ? (
+              <InvoiceForm
+                onAuthExpired={(notice) => {
+                  setAdminNotice(notice);
+                  setAdminAuthed(false);
+                }}
+              />
+            ) : (
+              <ActivityPanel
+                onAuthExpired={(notice) => {
+                  setAdminNotice(notice);
+                  setAdminAuthed(false);
+                }}
+              />
+            )}
           </>
         )}
       </main>
