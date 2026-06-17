@@ -1,3 +1,4 @@
+
 /**
  * Shared domain types. Kept free of any SDK imports so they can describe the
  * MeterMate contract independently of Maxio/Slack wire shapes.
