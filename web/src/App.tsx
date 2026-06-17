@@ -3,14 +3,16 @@ import { getHealth, type HealthResponse, ApiError } from './api';
 import BookForm from './components/client/BookForm';
 import UsageForm from './components/client/UsageForm';
 import PlanChangeForm from './components/client/PlanChangeForm';
+import LifecycleForm from './components/client/LifecycleForm';
 
 type Role = 'client' | 'admin';
-type ClientTab = 'book' | 'usage' | 'plan';
+type ClientTab = 'book' | 'usage' | 'plan' | 'lifecycle';
 
 const CLIENT_TABS: Array<{ id: ClientTab; label: string }> = [
   { id: 'book', label: 'Book & Subscribe' },
   { id: 'usage', label: 'Report Usage' },
   { id: 'plan', label: 'Change Plan' },
+  { id: 'lifecycle', label: 'Lifecycle' },
 ];
 
 /**
@@ -109,7 +111,15 @@ export default function App() {
                 </button>
               ))}
             </nav>
-            {clientTab === 'book' ? <BookForm /> : clientTab === 'usage' ? <UsageForm /> : <PlanChangeForm />}
+            {clientTab === 'book' ? (
+              <BookForm />
+            ) : clientTab === 'usage' ? (
+              <UsageForm />
+            ) : clientTab === 'plan' ? (
+              <PlanChangeForm />
+            ) : (
+              <LifecycleForm />
+            )}
           </>
         ) : (
           <p style={{ color: '#999' }}>Admin forms will appear here as each use case is built.</p>
