@@ -8,6 +8,7 @@ import { usageRouter } from './routes/usage.js';
 import { planChangeRouter } from './routes/planChange.js';
 import { lifecycleRouter } from './routes/lifecycle.js';
 import { invoicesRouter } from './routes/invoices.js';
+import { digestRouter } from './routes/digest.js';
 import { checkAuth, isSlackConfigured } from './services/slackService.js';
 import { verifyCatalogComponents } from './services/maxioService.js';
 import { isMaxioConfigured } from './maxioClient.js';
@@ -32,6 +33,7 @@ export function createApp() {
   app.use('/api', planChangeRouter);
   app.use('/api', lifecycleRouter);
   app.use('/api', invoicesRouter);
+  app.use('/api', digestRouter);
 
   // 404 for unknown API routes.
   app.use('/api', (_req: Request, res: Response) => {

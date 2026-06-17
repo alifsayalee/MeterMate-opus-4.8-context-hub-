@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  digestBlocks,
   failureBlocks,
   invoiceIssuedBlocks,
   lifecycleDoneBlocks,
@@ -150,6 +151,25 @@ describe('block builders', () => {
       publicUrl: null,
     });
     expect(blocks.find((b) => (b as { type: string }).type === 'actions')).toBeUndefined();
+  });
+
+  it('digestBlocks shows MRR, counts, and the reconciliation-lag note', () => {
+    const blocks = digestBlocks({
+      consultantName: 'Alex Rivera',
+      windowDays: 30,
+      activeCount: 3,
+      mrrInCents: 89700,
+      newSignups: 2,
+      churned: 1,
+      openInvoices: 4,
+      overdueInvoices: 1,
+      generatedAtLabel: 'Wed, 17 Jun 2026 00:00:00 GMT',
+    });
+    const dump = textDump(blocks);
+    expect(dump).toContain('Billing digest');
+    expect(dump).toContain('Alex Rivera');
+    expect(dump).toContain('$897.00');
+    expect(dump).toContain('may lag');
   });
 
   it('failureBlocks surfaces the error summary', () => {

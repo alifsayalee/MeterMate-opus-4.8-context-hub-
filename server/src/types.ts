@@ -86,6 +86,25 @@ export interface SessionData {
   scratch: Record<string, unknown>;
 }
 
+/** UC6 — per-consultant billing activity digest. */
+export interface DigestResult {
+  consultantId: string;
+  consultantName: string;
+  windowDays: number;
+  totalSubscriptions: number;
+  activeCount: number;
+  onHoldCount: number;
+  canceledCount: number;
+  newSignups: number;
+  churned: number;
+  mrrInCents: number;
+  openInvoices: number;
+  overdueInvoices: number;
+  openInvoiceAmountCents: number;
+  recentActivity: number;
+  generatedAt: string;
+}
+
 /** UC5 — normalized issued-invoice result. */
 export interface InvoiceResultData {
   invoiceUid: string;
