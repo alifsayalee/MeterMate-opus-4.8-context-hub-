@@ -85,6 +85,18 @@ export interface SessionData {
   scratch: Record<string, unknown>;
 }
 
+/** UC5 — normalized issued-invoice result. */
+export interface InvoiceResultData {
+  invoiceUid: string;
+  status: string;
+  totalAmount: string | null;
+  dueAmount: string | null;
+  dueDate: string | null;
+  issueDate: string | null;
+  publicUrl: string | null;
+  emailed: boolean;
+}
+
 export type LifecycleAction = 'pause' | 'resume' | 'cancel' | 'reactivate';
 export type CancelType = 'immediate' | 'end-of-period';
 
