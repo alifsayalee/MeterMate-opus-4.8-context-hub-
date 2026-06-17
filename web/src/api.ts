@@ -219,6 +219,41 @@ export function formatSignedMoney(cents: number): string {
   return `${sign}${formatMoney(Math.abs(cents))}`;
 }
 
+// ----- UC4: Lifecycle Control -----
+
+export type LifecycleAction = 'pause' | 'resume' | 'cancel' | 'reactivate';
+export type CancelType = 'immediate' | 'end-of-period';
+
+export interface LifecycleRequest {
+  txnRef: string;
+  action: LifecycleAction;
+  cancelType?: CancelType;
+  reasonCode?: string;
+}
+
+export interface LifecycleResult {
+  action: LifecycleAction;
+  cancelType: CancelType | null;
+  fromState: string;
+  toState: string;
+  scheduledCancellation: boolean;
+  effectiveDate: string | null;
+  reasonCode: string | null;
+  maxioUrl: string;
+}
+
+export interface LifecycleSuccess {
+  status: 'ok';
+  txnId: string;
+  channelId?: string;
+  channelName?: string;
+  lifecycle: LifecycleResult;
+}
+
+export function lifecycle(body: LifecycleRequest): Promise<LifecycleSuccess> {
+  return postWithSession<LifecycleSuccess>('/lifecycle', body as unknown as Record<string, unknown>);
+}
+
 // ----- shared client-side memory of the last transaction -----
 
 const LAST_TXN_KEY = 'metermate.lastTxnId';

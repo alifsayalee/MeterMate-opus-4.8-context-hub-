@@ -85,6 +85,23 @@ export interface SessionData {
   scratch: Record<string, unknown>;
 }
 
+export type LifecycleAction = 'pause' | 'resume' | 'cancel' | 'reactivate';
+export type CancelType = 'immediate' | 'end-of-period';
+
+/** UC4 — result of a lifecycle operation. */
+export interface LifecycleResult {
+  action: LifecycleAction;
+  cancelType: CancelType | null;
+  fromState: string;
+  toState: string;
+  /** True when cancellation is scheduled for end of period (not immediate). */
+  scheduledCancellation: boolean;
+  /** Effective date for a deferred action (e.g. end-of-period); null = now. */
+  effectiveDate: string | null;
+  reasonCode: string | null;
+  maxioUrl: string;
+}
+
 export type PlanChangeTiming = 'prorate' | 'at-renewal';
 
 /** UC3 — prorated cost preview of a plan change (no commit). */

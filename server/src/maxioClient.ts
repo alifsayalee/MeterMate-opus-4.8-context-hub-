@@ -5,6 +5,7 @@ import {
   SubscriptionComponentsController,
   SubscriptionProductsController,
   SubscriptionsController,
+  SubscriptionStatusController,
 } from '@maxio-com/advanced-billing-sdk';
 import { config } from './config.js';
 import { createLogger } from './logger.js';
@@ -61,6 +62,10 @@ export function componentsController(): ComponentsController {
 
 export function subscriptionProductsController(): SubscriptionProductsController {
   return new SubscriptionProductsController(getClient());
+}
+
+export function subscriptionStatusController(): SubscriptionStatusController {
+  return new SubscriptionStatusController(getClient());
 }
 
 /** Deep link to a subscription in the Maxio dashboard for "View in Maxio". */
