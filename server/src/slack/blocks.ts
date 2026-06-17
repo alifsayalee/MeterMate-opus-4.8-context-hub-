@@ -228,6 +228,33 @@ export function clientByEmailNoticeBlocks(clientEmail: string): KnownBlock[] {
   ];
 }
 
+/** UC6 — per-consultant billing digest. */
+export function digestBlocks(input: {
+  consultantName: string;
+  windowDays: number;
+  activeCount: number;
+  mrrInCents: number;
+  newSignups: number;
+  churned: number;
+  openInvoices: number;
+  overdueInvoices: number;
+  generatedAtLabel: string;
+}): KnownBlock[] {
+  return [
+    header(':chart_with_upwards_trend: Billing digest'),
+    context(`*${input.consultantName}* · last ${input.windowDays} days · ${input.generatedAtLabel}`),
+    fields([
+      ['Active subscriptions', String(input.activeCount)],
+      ['MRR', `${money(input.mrrInCents)} / month`],
+      ['New signups', String(input.newSignups)],
+      ['Churn', String(input.churned)],
+      ['Open invoices', String(input.openInvoices)],
+      ['Overdue invoices', String(input.overdueInvoices)],
+    ]),
+    context(':information_source: Reporting data is for reconciliation, not real-time confirmation — counts may lag live state slightly.'),
+  ];
+}
+
 /** Generic failure block (any UC). */
 export function failureBlocks(useCase: string, errorSummary: string): KnownBlock[] {
   return [

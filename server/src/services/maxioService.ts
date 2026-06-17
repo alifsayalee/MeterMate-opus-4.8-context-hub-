@@ -1,7 +1,11 @@
 import {
   CollectionMethod,
   CreateInvoiceStatus,
+  Direction,
+  EventKey,
   FailedPaymentAction,
+  InvoiceStatus,
+  ListEventsDateField,
   type CreateInvoiceRequest,
   type CreateSubscriptionRequest,
   type CreateUsageRequest,
@@ -16,6 +20,7 @@ import { COMPONENTS, getPlan } from '../catalog.js';
 import { createLogger } from '../logger.js';
 import {
   componentsController,
+  eventsController,
   invoicesController,
   subscriptionComponentsController,
   subscriptionProductsController,
@@ -27,6 +32,7 @@ import type {
   CancelType,
   CatalogComponent,
   CollectionMethodValue,
+  DigestResult,
   InvoiceResultData,
   LifecycleAction,
   LifecycleResult,
@@ -509,6 +515,148 @@ export async function issueInvoiceForSubscription(
     log.error(normalized.message, { statusCode: normalized.statusCode });
     throw normalized;
   }
+}
+
+export interface BuildDigestInput {
+  consultantId: string;
+  consultantName: string;
+  /** Subscription ids in this consultant's scope (from the transaction store). */
+  subscriptionIds: number[];
+  windowDays: number;
+}
+
+function amountToCents(amount: string | null | undefined): number {
+  if (!amount) return 0;
+  const n = Number(amount);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+/**
+ * UC6 — build a per-consultant billing digest from Maxio's live data, scoped to
+ * the consultant's subscriptions (subscription reads + open-invoice list + the
+ * activity stream). Every source degrades independently: a failure in one read
+ * logs and contributes zero rather than failing the whole digest. Reporting data
+ * lags live state slightly — the message says so.
+ */
+export async function buildDigest(input: BuildDigestInput): Promise<DigestResult> {
+  const subIds = [...new Set(input.subscriptionIds)];
+  const subIdSet = new Set(subIds);
+  const generatedAt = new Date().toISOString();
+  const windowStartMs = Date.now() - input.windowDays * 86_400_000;
+  const windowStartDate = new Date(windowStartMs).toISOString().slice(0, 10);
+
+  let activeCount = 0;
+  let onHoldCount = 0;
+  let canceledCount = 0;
+  let newSignups = 0;
+  let churned = 0;
+  let mrrInCents = 0;
+
+  // Read each in-scope subscription (bounded by this consultant's bookings).
+  const subs = await Promise.all(
+    subIds.map(async (id) => {
+      try {
+        const { result } = await subscriptionsController().readSubscription(id);
+        return result.subscription ?? null;
+      } catch (err) {
+        log.warn(`digest: failed to read subscription ${id}`, err);
+        return null;
+      }
+    }),
+  );
+
+  for (const sub of subs) {
+    if (!sub) continue;
+    const state = String(sub.state ?? '').toLowerCase();
+    const isLive = state === 'active' || state === 'trialing';
+    if (isLive) activeCount++;
+    if (state === 'on_hold') onHoldCount++;
+    if (state === 'canceled') canceledCount++;
+    if (sub.createdAt && new Date(sub.createdAt).getTime() >= windowStartMs) newSignups++;
+    if (sub.canceledAt && new Date(sub.canceledAt).getTime() >= windowStartMs) churned++;
+    if (isLive && sub.product?.handle) {
+      mrrInCents += getPlan(sub.product.handle)?.priceInCents ?? 0;
+    }
+  }
+
+  // Open invoices scoped to our subscriptions (overdue = past due date).
+  let openInvoices = 0;
+  let overdueInvoices = 0;
+  let openInvoiceAmountCents = 0;
+  if (subIds.length > 0) {
+    try {
+      const todayMs = Date.now();
+      let page = 1;
+      for (;;) {
+        const { result } = await invoicesController().listInvoices({
+          page,
+          perPage: 200,
+          status: InvoiceStatus.Open,
+        });
+        const list = result.invoices ?? [];
+        for (const inv of list) {
+          if (inv.subscriptionId != null && subIdSet.has(inv.subscriptionId)) {
+            openInvoices++;
+            openInvoiceAmountCents += amountToCents(inv.totalAmount);
+            if (inv.dueDate && new Date(inv.dueDate).getTime() < todayMs) overdueInvoices++;
+          }
+        }
+        if (list.length < 200 || page >= 25) break;
+        page++;
+      }
+    } catch (err) {
+      log.warn('digest: listInvoices failed', err);
+    }
+  }
+
+  // Recent activity events within the window, scoped to our subscriptions.
+  let recentActivity = 0;
+  if (subIds.length > 0) {
+    try {
+      const { result } = await eventsController().listEvents({
+        page: 1,
+        perPage: 200,
+        direction: Direction.Desc,
+        dateField: ListEventsDateField.CreatedAt,
+        startDate: windowStartDate,
+        filter: [
+          EventKey.SignupSuccess,
+          EventKey.PaymentSuccess,
+          EventKey.PaymentFailure,
+          EventKey.RenewalSuccess,
+          EventKey.SubscriptionStateChange,
+        ],
+      });
+      for (const ev of result) {
+        const sid = ev.event?.subscriptionId;
+        if (sid != null && subIdSet.has(sid)) recentActivity++;
+      }
+    } catch (err) {
+      log.warn('digest: listEvents failed', err);
+    }
+  }
+
+  log.info(
+    `Digest for ${input.consultantId}: ${activeCount} active, MRR ${mrrInCents}, ${openInvoices} open invoices`,
+  );
+
+  return {
+    consultantId: input.consultantId,
+    consultantName: input.consultantName,
+    windowDays: input.windowDays,
+    totalSubscriptions: subIds.length,
+    activeCount,
+    onHoldCount,
+    canceledCount,
+    newSignups,
+    churned,
+    mrrInCents,
+    openInvoices,
+    overdueInvoices,
+    openInvoiceAmountCents,
+    recentActivity,
+    generatedAt,
+  };
 }
 
 /**
