@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   failureBlocks,
+  invoiceIssuedBlocks,
   lifecycleDoneBlocks,
   planChangedBlocks,
   planChangePreviewBlocks,
@@ -121,6 +122,34 @@ describe('block builders', () => {
     const dump = textDump(blocks);
     expect(dump).toContain('canceling at period end');
     expect(dump).toContain('pending cancellation');
+  });
+
+  it('invoiceIssuedBlocks shows amount due and a Pay Invoice button', () => {
+    const blocks = invoiceIssuedBlocks({
+      totalAmount: '500.00',
+      dueAmount: '500.00',
+      dueDate: '2026-07-01',
+      emailed: true,
+      publicUrl: 'https://pay/inv_1',
+    });
+    const dump = textDump(blocks);
+    expect(dump).toContain('Invoice issued');
+    expect(dump).toContain('$500.00');
+    const action = blocks.find((b) => (b as { type: string }).type === 'actions') as
+      | { elements: Array<{ url: string }> }
+      | undefined;
+    expect(action?.elements[0]?.url).toBe('https://pay/inv_1');
+  });
+
+  it('invoiceIssuedBlocks omits the button when there is no hosted URL', () => {
+    const blocks = invoiceIssuedBlocks({
+      totalAmount: '500.00',
+      dueAmount: '500.00',
+      dueDate: null,
+      emailed: false,
+      publicUrl: null,
+    });
+    expect(blocks.find((b) => (b as { type: string }).type === 'actions')).toBeUndefined();
   });
 
   it('failureBlocks surfaces the error summary', () => {

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getHealth, type HealthResponse, ApiError } from './api';
+import { getHealth, type HealthResponse, ApiError, clearAdminAuth, hasAdminAuth } from './api';
 import BookForm from './components/client/BookForm';
 import UsageForm from './components/client/UsageForm';
 import PlanChangeForm from './components/client/PlanChangeForm';
 import LifecycleForm from './components/client/LifecycleForm';
+import AdminLogin from './components/admin/AdminLogin';
+import InvoiceForm from './components/admin/InvoiceForm';
 
 type Role = 'client' | 'admin';
 type ClientTab = 'book' | 'usage' | 'plan' | 'lifecycle';
@@ -23,6 +25,8 @@ const CLIENT_TABS: Array<{ id: ClientTab; label: string }> = [
 export default function App() {
   const [role, setRole] = useState<Role>('client');
   const [clientTab, setClientTab] = useState<ClientTab>('book');
+  const [adminAuthed, setAdminAuthed] = useState<boolean>(hasAdminAuth());
+  const [adminNotice, setAdminNotice] = useState<string | undefined>(undefined);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,8 +125,34 @@ export default function App() {
               <LifecycleForm />
             )}
           </>
+        ) : !adminAuthed ? (
+          <AdminLogin
+            notice={adminNotice}
+            onAuthed={() => {
+              setAdminNotice(undefined);
+              setAdminAuthed(true);
+            }}
+          />
         ) : (
-          <p style={{ color: '#999' }}>Admin forms will appear here as each use case is built.</p>
+          <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <button
+                onClick={() => {
+                  clearAdminAuth();
+                  setAdminAuthed(false);
+                }}
+                style={{ border: '1px solid #ddd', borderRadius: 8, background: '#fff', cursor: 'pointer', padding: '6px 12px', fontSize: 13 }}
+              >
+                Sign out
+              </button>
+            </div>
+            <InvoiceForm
+              onAuthExpired={(notice) => {
+                setAdminNotice(notice);
+                setAdminAuthed(false);
+              }}
+            />
+          </>
         )}
       </main>
     </div>

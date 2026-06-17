@@ -27,8 +27,8 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : undefined;
@@ -254,6 +254,44 @@ export function lifecycle(body: LifecycleRequest): Promise<LifecycleSuccess> {
   return postWithSession<LifecycleSuccess>('/lifecycle', body as unknown as Record<string, unknown>);
 }
 
+// ----- UC5: Invoice Issue + Send (admin) -----
+
+export interface InvoiceLineItem {
+  title: string;
+  quantity: number;
+  unitPrice: string;
+}
+
+export interface InvoiceRequest {
+  txnRef: string;
+  lineItems: InvoiceLineItem[];
+  memo?: string;
+  sendEmail: boolean;
+}
+
+export interface InvoiceResultData {
+  invoiceUid: string;
+  status: string;
+  totalAmount: string | null;
+  dueAmount: string | null;
+  dueDate: string | null;
+  issueDate: string | null;
+  publicUrl: string | null;
+  emailed: boolean;
+}
+
+export interface InvoiceSuccess {
+  status: 'ok';
+  txnId: string;
+  channelId?: string;
+  channelName?: string;
+  invoice: InvoiceResultData;
+}
+
+export function issueInvoice(body: InvoiceRequest): Promise<InvoiceSuccess> {
+  return postAdminWithSession<InvoiceSuccess>('/invoices', body as unknown as Record<string, unknown>);
+}
+
 // ----- shared client-side memory of the last transaction -----
 
 const LAST_TXN_KEY = 'metermate.lastTxnId';
@@ -306,6 +344,54 @@ export function getCurrentPlan(txnId: string): string | undefined {
 export function postWithSession<T>(path: string, body: Record<string, unknown>): Promise<T> {
   return request<T>(path, {
     method: 'POST',
+    body: JSON.stringify({ sessionId: getSessionId(), ...body }),
+  });
+}
+
+// ----- Admin auth (hardcoded-cred gate; HTTP Basic) -----
+
+const ADMIN_AUTH_KEY = 'metermate.adminAuth';
+
+export function setAdminAuth(user: string, password: string): void {
+  try {
+    sessionStorage.setItem(ADMIN_AUTH_KEY, btoa(`${user}:${password}`));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearAdminAuth(): void {
+  try {
+    sessionStorage.removeItem(ADMIN_AUTH_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function hasAdminAuth(): boolean {
+  try {
+    return Boolean(sessionStorage.getItem(ADMIN_AUTH_KEY));
+  } catch {
+    return false;
+  }
+}
+
+function adminHeader(): Record<string, string> {
+  const token = (() => {
+    try {
+      return sessionStorage.getItem(ADMIN_AUTH_KEY);
+    } catch {
+      return null;
+    }
+  })();
+  return token ? { Authorization: `Basic ${token}` } : {};
+}
+
+/** POST helper for admin routes: injects sessionId and HTTP Basic auth. */
+export function postAdminWithSession<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    headers: adminHeader(),
     body: JSON.stringify({ sessionId: getSessionId(), ...body }),
   });
 }

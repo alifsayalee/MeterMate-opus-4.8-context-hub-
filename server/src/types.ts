@@ -1,3 +1,4 @@
+
 /**
  * Shared domain types. Kept free of any SDK imports so they can describe the
  * MeterMate contract independently of Maxio/Slack wire shapes.
@@ -83,6 +84,18 @@ export interface SessionData {
   idempotencyKeys: Set<string>;
   /** Free-form bag for multi-step flows (e.g. UC3 preview → confirm). */
   scratch: Record<string, unknown>;
+}
+
+/** UC5 — normalized issued-invoice result. */
+export interface InvoiceResultData {
+  invoiceUid: string;
+  status: string;
+  totalAmount: string | null;
+  dueAmount: string | null;
+  dueDate: string | null;
+  issueDate: string | null;
+  publicUrl: string | null;
+  emailed: boolean;
 }
 
 export type LifecycleAction = 'pause' | 'resume' | 'cancel' | 'reactivate';

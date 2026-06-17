@@ -7,6 +7,7 @@ import { bookRouter } from './routes/book.js';
 import { usageRouter } from './routes/usage.js';
 import { planChangeRouter } from './routes/planChange.js';
 import { lifecycleRouter } from './routes/lifecycle.js';
+import { invoicesRouter } from './routes/invoices.js';
 import { checkAuth, isSlackConfigured } from './services/slackService.js';
 import { verifyCatalogComponents } from './services/maxioService.js';
 import { isMaxioConfigured } from './maxioClient.js';
@@ -30,6 +31,7 @@ export function createApp() {
   app.use('/api', usageRouter);
   app.use('/api', planChangeRouter);
   app.use('/api', lifecycleRouter);
+  app.use('/api', invoicesRouter);
 
   // 404 for unknown API routes.
   app.use('/api', (_req: Request, res: Response) => {

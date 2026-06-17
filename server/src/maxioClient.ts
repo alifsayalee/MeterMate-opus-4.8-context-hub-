@@ -2,6 +2,7 @@ import {
   Client,
   ComponentsController,
   Environment,
+  InvoicesController,
   SubscriptionComponentsController,
   SubscriptionProductsController,
   SubscriptionsController,
@@ -66,6 +67,10 @@ export function subscriptionProductsController(): SubscriptionProductsController
 
 export function subscriptionStatusController(): SubscriptionStatusController {
   return new SubscriptionStatusController(getClient());
+}
+
+export function invoicesController(): InvoicesController {
+  return new InvoicesController(getClient());
 }
 
 /** Deep link to a subscription in the Maxio dashboard for "View in Maxio". */

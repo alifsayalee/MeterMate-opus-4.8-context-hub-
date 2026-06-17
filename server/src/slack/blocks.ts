@@ -191,6 +191,34 @@ export function lifecycleDoneBlocks(input: {
   ];
 }
 
+/** UC5 in-progress. */
+export function invoiceProgressBlocks(): KnownBlock[] {
+  return [header(':receipt: Issuing invoice…')];
+}
+
+/** UC5 completion — invoice issued, with a Pay Invoice button. */
+export function invoiceIssuedBlocks(input: {
+  totalAmount: string | null;
+  dueAmount: string | null;
+  dueDate: string | null;
+  emailed: boolean;
+  publicUrl: string | null;
+}): KnownBlock[] {
+  const blocks: KnownBlock[] = [
+    header(':receipt: Invoice issued'),
+    fields([
+      ['Amount due', input.dueAmount != null ? `$${input.dueAmount}` : '—'],
+      ['Total', input.totalAmount != null ? `$${input.totalAmount}` : '—'],
+      ['Due date', input.dueDate ?? '—'],
+      ['Emailed', input.emailed ? 'yes' : 'no'],
+    ]),
+  ];
+  if (input.publicUrl) {
+    blocks.push(linkButton('Pay Invoice', input.publicUrl));
+  }
+  return blocks;
+}
+
 /** Note posted when the client could not be invited (tier-2 fallback). */
 export function clientByEmailNoticeBlocks(clientEmail: string): KnownBlock[] {
   return [

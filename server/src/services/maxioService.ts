@@ -1,9 +1,13 @@
 import {
   CollectionMethod,
+  CreateInvoiceStatus,
+  FailedPaymentAction,
+  type CreateInvoiceRequest,
   type CreateSubscriptionRequest,
   type CreateUsageRequest,
   type EBBEvent,
   type CancellationRequest,
+  type SendInvoiceRequest,
   type SubscriptionMigrationPreviewRequest,
   type SubscriptionProductMigrationRequest,
   type UpdateSubscriptionRequest,
@@ -12,6 +16,7 @@ import { COMPONENTS, getPlan } from '../catalog.js';
 import { createLogger } from '../logger.js';
 import {
   componentsController,
+  invoicesController,
   subscriptionComponentsController,
   subscriptionProductsController,
   subscriptionsController,
@@ -22,6 +27,7 @@ import type {
   CancelType,
   CatalogComponent,
   CollectionMethodValue,
+  InvoiceResultData,
   LifecycleAction,
   LifecycleResult,
   PlanChangePreview,
@@ -415,6 +421,91 @@ export async function lifecycleAction(input: LifecycleInput): Promise<LifecycleR
   } catch (err) {
     if (err instanceof MaxioServiceError) throw err;
     const normalized = normalizeMaxioError(err, `lifecycle:${input.action}`);
+    log.error(normalized.message, { statusCode: normalized.statusCode });
+    throw normalized;
+  }
+}
+
+export interface InvoiceLineItemInput {
+  title: string;
+  quantity: number;
+  /** Decimal amount as a string, e.g. "500.00". */
+  unitPrice: string;
+}
+
+export interface IssueInvoiceInput {
+  subscriptionId: number;
+  lineItems: InvoiceLineItemInput[];
+  memo?: string;
+  sendEmail: boolean;
+  /** Recipient for the emailed invoice (the client). */
+  recipientEmail?: string;
+}
+
+/**
+ * UC5 — create an ad-hoc invoice as a draft, issue it, optionally email it, and
+ * read back amount due, due date, and the hosted public payment URL. Creating a
+ * draft first makes the create→issue steps explicit (narrated separately).
+ */
+export async function issueInvoiceForSubscription(
+  input: IssueInvoiceInput,
+): Promise<InvoiceResultData> {
+  if (input.lineItems.length === 0) {
+    throw new MaxioServiceError('At least one line item is required', 400, []);
+  }
+
+  try {
+    const controller = invoicesController();
+
+    // 1. Create as a draft.
+    const createBody: CreateInvoiceRequest = {
+      invoice: {
+        lineItems: input.lineItems.map((li) => ({
+          title: li.title,
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+        })),
+        ...(input.memo ? { memo: input.memo } : {}),
+        status: CreateInvoiceStatus.Draft,
+      },
+    };
+    const { result: created } = await controller.createInvoice(input.subscriptionId, createBody);
+    const uid = created.invoice?.uid;
+    if (!uid) {
+      throw new MaxioServiceError('Maxio returned no invoice uid', undefined, []);
+    }
+    log.info(`Created draft invoice ${uid} for sub ${input.subscriptionId}`);
+
+    // 2. Issue it.
+    const { result: issued } = await controller.issueInvoice(uid, {
+      onFailedPayment: FailedPaymentAction.LeaveOpenInvoice,
+    });
+    log.info(`Issued invoice ${uid} (status ${issued.status})`);
+
+    // 3. Optionally email it.
+    let emailed = false;
+    if (input.sendEmail) {
+      const sendBody: SendInvoiceRequest | undefined = input.recipientEmail
+        ? { recipientEmails: [input.recipientEmail] }
+        : undefined;
+      await controller.sendInvoice(uid, sendBody);
+      emailed = true;
+      log.info(`Emailed invoice ${uid}${input.recipientEmail ? ` to ${input.recipientEmail}` : ''}`);
+    }
+
+    return {
+      invoiceUid: uid,
+      status: String(issued.status ?? 'unknown'),
+      totalAmount: issued.totalAmount ?? null,
+      dueAmount: issued.dueAmount ?? null,
+      dueDate: issued.dueDate ?? null,
+      issueDate: issued.issueDate ?? null,
+      publicUrl: issued.publicUrl ?? created.invoice?.publicUrl ?? null,
+      emailed,
+    };
+  } catch (err) {
+    if (err instanceof MaxioServiceError) throw err;
+    const normalized = normalizeMaxioError(err, 'issueInvoice');
     log.error(normalized.message, { statusCode: normalized.statusCode });
     throw normalized;
   }
