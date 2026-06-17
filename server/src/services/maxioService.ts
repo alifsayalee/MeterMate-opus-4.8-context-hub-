@@ -3,6 +3,7 @@ import {
   type CreateSubscriptionRequest,
   type CreateUsageRequest,
   type EBBEvent,
+  type CancellationRequest,
   type SubscriptionMigrationPreviewRequest,
   type SubscriptionProductMigrationRequest,
   type UpdateSubscriptionRequest,
@@ -14,11 +15,15 @@ import {
   subscriptionComponentsController,
   subscriptionProductsController,
   subscriptionsController,
+  subscriptionStatusController,
   subscriptionUrl,
 } from '../maxioClient.js';
 import type {
+  CancelType,
   CatalogComponent,
   CollectionMethodValue,
+  LifecycleAction,
+  LifecycleResult,
   PlanChangePreview,
   PlanChangeResult,
   PlanChangeTiming,
@@ -152,6 +157,11 @@ function resolvePlanName(handle: string | null, fallback: string | null): string
   return getPlan(handle)?.name ?? fallback;
 }
 
+/** Case-insensitive handle comparison; tolerant of null current handle. */
+function isSamePlan(currentHandle: string | null, targetHandle: string): boolean {
+  return currentHandle != null && currentHandle.toLowerCase() === targetHandle.toLowerCase();
+}
+
 export interface PlanChangeInput {
   subscriptionId: number;
   targetHandle: string;
@@ -174,7 +184,7 @@ export async function previewPlanChange(input: PlanChangeInput): Promise<PlanCha
     const current = await readSubscriptionSummary(input.subscriptionId);
     const fromName = resolvePlanName(current.productHandle, current.productName);
 
-    if (current.productHandle === input.targetHandle) {
+    if (isSamePlan(current.productHandle, input.targetHandle)) {
       throw new MaxioServiceError(
         `Subscription is already on "${target.name}"`,
         400,
@@ -251,7 +261,7 @@ export async function applyPlanChange(input: PlanChangeInput): Promise<PlanChang
     const current = await readSubscriptionSummary(input.subscriptionId);
     const fromName = resolvePlanName(current.productHandle, current.productName);
 
-    if (current.productHandle === input.targetHandle) {
+    if (isSamePlan(current.productHandle, input.targetHandle)) {
       throw new MaxioServiceError(`Subscription is already on "${target.name}"`, 400, []);
     }
 
@@ -323,6 +333,88 @@ export async function applyPlanChange(input: PlanChangeInput): Promise<PlanChang
   } catch (err) {
     if (err instanceof MaxioServiceError) throw err;
     const normalized = normalizeMaxioError(err, 'applyPlanChange');
+    log.error(normalized.message, { statusCode: normalized.statusCode });
+    throw normalized;
+  }
+}
+
+export interface LifecycleInput {
+  subscriptionId: number;
+  action: LifecycleAction;
+  /** Only meaningful for cancel; defaults to 'immediate'. */
+  cancelType?: CancelType;
+  reasonCode?: string;
+}
+
+/**
+ * UC4 — lifecycle control. Maps each action to the matching status operation
+ * (pause→hold, resume, cancel immediate vs delayed, reactivate), then reads the
+ * subscription back so the reported state transition reflects Maxio's truth.
+ */
+export async function lifecycleAction(input: LifecycleInput): Promise<LifecycleResult> {
+  const status = subscriptionStatusController();
+  const cancelType: CancelType | null =
+    input.action === 'cancel' ? (input.cancelType ?? 'immediate') : null;
+
+  try {
+    const before = await readSubscriptionSummary(input.subscriptionId);
+    let scheduledCancellation = false;
+    let effectiveDate: string | null = null;
+
+    switch (input.action) {
+      case 'pause':
+        await status.pauseSubscription(input.subscriptionId);
+        break;
+
+      case 'resume':
+        await status.resumeSubscription(input.subscriptionId);
+        break;
+
+      case 'reactivate':
+        await status.reactivateSubscription(input.subscriptionId);
+        break;
+
+      case 'cancel': {
+        const body: CancellationRequest | undefined = input.reasonCode
+          ? { subscription: { reasonCode: input.reasonCode, cancellationMessage: 'Canceled via MeterMate' } }
+          : undefined;
+        if (cancelType === 'end-of-period') {
+          // Delayed cancellation: keep access until the paid period ends.
+          await status.initiateDelayedCancellation(input.subscriptionId, body);
+          scheduledCancellation = true;
+          effectiveDate = before.currentPeriodEndsAt;
+        } else {
+          await status.cancelSubscription(input.subscriptionId, body);
+        }
+        break;
+      }
+
+      default: {
+        // Exhaustiveness guard.
+        const never: never = input.action;
+        throw new MaxioServiceError(`Unsupported lifecycle action "${String(never)}"`, 400, []);
+      }
+    }
+
+    // Read the authoritative new state after the operation.
+    const after = await readSubscriptionSummary(input.subscriptionId);
+    log.info(
+      `Lifecycle ${input.action}${cancelType ? `/${cancelType}` : ''} on sub ${input.subscriptionId}: ${before.state} -> ${after.state}${scheduledCancellation ? ' (pending cancellation)' : ''}`,
+    );
+
+    return {
+      action: input.action,
+      cancelType,
+      fromState: before.state,
+      toState: after.state,
+      scheduledCancellation,
+      effectiveDate,
+      reasonCode: input.reasonCode ?? null,
+      maxioUrl: subscriptionUrl(input.subscriptionId),
+    };
+  } catch (err) {
+    if (err instanceof MaxioServiceError) throw err;
+    const normalized = normalizeMaxioError(err, `lifecycle:${input.action}`);
     log.error(normalized.message, { statusCode: normalized.statusCode });
     throw normalized;
   }

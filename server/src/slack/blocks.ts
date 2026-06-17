@@ -164,6 +164,33 @@ export function planChangedBlocks(input: {
   ];
 }
 
+/** UC4 in-progress. */
+export function lifecycleProgressBlocks(actionLabel: string): KnownBlock[] {
+  return [header(`:vertical_traffic_light: ${actionLabel} in progress…`)];
+}
+
+/** UC4 completion — state transition. */
+export function lifecycleDoneBlocks(input: {
+  fromState: string;
+  toState: string;
+  scheduledCancellation: boolean;
+  effectiveLabel: string;
+  reasonCode: string | null;
+  maxioUrl: string;
+}): KnownBlock[] {
+  const target = input.scheduledCancellation ? 'canceling at period end' : input.toState;
+  const transition = `${input.fromState} → ${target}`;
+  return [
+    header(`:vertical_traffic_light: ${transition}`),
+    fields([
+      ['State', input.scheduledCancellation ? `${input.toState} (pending cancellation)` : input.toState],
+      ['Reason', input.reasonCode ?? '—'],
+      ['Effective', input.effectiveLabel],
+    ]),
+    linkButton('View in Maxio', input.maxioUrl),
+  ];
+}
+
 /** Note posted when the client could not be invited (tier-2 fallback). */
 export function clientByEmailNoticeBlocks(clientEmail: string): KnownBlock[] {
   return [

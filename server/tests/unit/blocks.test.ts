@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   failureBlocks,
+  lifecycleDoneBlocks,
   planChangedBlocks,
   planChangePreviewBlocks,
   subscriptionActiveBlocks,
@@ -92,6 +93,34 @@ describe('block builders', () => {
     expect(dump).toContain('Plan changed');
     expect(dump).toContain('−$150.00');
     expect(dump).toContain('https://site.chargify.com/subscriptions/9');
+  });
+
+  it('lifecycleDoneBlocks shows the state transition and reason', () => {
+    const blocks = lifecycleDoneBlocks({
+      fromState: 'active',
+      toState: 'canceled',
+      scheduledCancellation: false,
+      effectiveLabel: 'Immediately',
+      reasonCode: 'too_expensive',
+      maxioUrl: 'https://site.chargify.com/subscriptions/9',
+    });
+    const dump = textDump(blocks);
+    expect(dump).toContain('active → canceled');
+    expect(dump).toContain('too_expensive');
+  });
+
+  it('lifecycleDoneBlocks marks a scheduled end-of-period cancellation', () => {
+    const blocks = lifecycleDoneBlocks({
+      fromState: 'active',
+      toState: 'active',
+      scheduledCancellation: true,
+      effectiveLabel: '2026-07-16',
+      reasonCode: null,
+      maxioUrl: 'https://site.chargify.com/subscriptions/9',
+    });
+    const dump = textDump(blocks);
+    expect(dump).toContain('canceling at period end');
+    expect(dump).toContain('pending cancellation');
   });
 
   it('failureBlocks surfaces the error summary', () => {
